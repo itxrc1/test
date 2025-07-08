@@ -7,15 +7,15 @@ from urllib.parse import urlencode
 
 def generate_message_image(text, name="@Askoutbot", compact=True):
     # Use smaller dimensions for more prominent bubble
-    width = "300" if compact else "800"
-    height = "300" if compact else "300"
+    width = "400" if compact else "800"
+    height = "400" if compact else "300"
     
     params = {
         "name": name,
         "text": text,
         "bubble": "#000000",
-        "background": "random",
-        "avatar": "true",
+        "background": "random-gradient",
+        "avatar": "false",
         "width": width,      # New parameter
         "height": height     # New parameter
     }
