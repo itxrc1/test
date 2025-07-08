@@ -15,7 +15,7 @@ from langs import LANGS, LANG_NAMES
 
 API_TOKEN = "8032679205:AAHFMO9t-T7Lavbbf_noiePQoniDSHzSuVA"
 MONGODB_URL = "mongodb+srv://itxcriminal:qureshihashmI1@cluster0.jyqy9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DB_NAME = "askout4"
+DB_NAME = "askout5"
 
 logging.basicConfig(level=logging.INFO)
 
