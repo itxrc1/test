@@ -122,7 +122,6 @@ async def language_selected(callback_query, state: FSMContext):
     if start_param:
         target_user = await get_user_by_link_id(start_param)
         if target_user:
-            # Save in state so next text is sent as anonymous
             await state.update_data(target_link_id=start_param)
             await callback_query.message.edit_text(
                 LANGS[lang_code]["send_anonymous"]
@@ -149,7 +148,6 @@ async def start_with_param(message: Message, command: CommandStart, state: FSMCo
     link_id = extract_link_id(command.args)
     user = await db.users.find_one({"user_id": message.from_user.id})
     if not user:
-        # Don't insert user yet! Just ask for language and remember start param
         await state.update_data(start_param=link_id)
         await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
         return
@@ -195,6 +193,22 @@ async def start_no_param(message: Message, state: FSMContext):
         reply_markup=get_share_keyboard(link, lang)
     )
     await state.clear()
+
+@router.message(F.reply_to_message)
+async def handle_reply(message: Message):
+    replied = message.reply_to_message
+    if replied and replied.text:
+        match = re.match(r"<!--anon_from:(\d+)-->\n", replied.text)
+        if match:
+            orig_sender_id = int(match.group(1))
+            lang = await get_user_lang(orig_sender_id)
+            await bot.send_message(
+                orig_sender_id,
+                f"📩 <b>You received a reply to your anonymous message:</b>\n\n{message.text}"
+            )
+            await message.answer("✅ Your reply has been sent anonymously!")
+            return
+    # Otherwise, let other handlers proceed (don't reply or do anything)
 
 @router.message(Command("setusername"))
 async def set_custom_username(message: Message):
@@ -261,7 +275,8 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
             return
         await bot.send_message(
             user["user_id"],
-            LANGS[user.get("language", "en")]["anonymous_received"].format(message=message.text)
+            f"<!--anon_from:{message.from_user.id}-->\n"
+            f"{LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)}"
         )
         today = today_str()
         await db.users.update_one(
