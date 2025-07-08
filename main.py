@@ -2,6 +2,7 @@ import logging
 import secrets
 import re
 from datetime import datetime
+import aiohttp
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
@@ -82,21 +83,29 @@ def get_lang_markup():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # --- Helper to send thumbs up reaction using the raw Bot API (Bot API 7.0+ only) ---
-async def send_thumbs_reaction(bot, chat_id, message_id):
-    try:
-        # This uses aiogram's low-level API. Will only work if Telegram Bot API 7.0+ is available.
-        await bot.api.request(
-            "sendMessageReaction",
+async def set_reaction(bot, chat_id, message_id, emoji):
+    token = bot.token
+    url = f"https://api.telegram.org/bot{token}/setMessageReaction"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "reaction": [
             {
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "emoji": "👍"
+                "type": "emoji",
+                "emoji": emoji
             }
-        )
+        ]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as resp:
+                if resp.status == 200:
+                    return True
+                else:
+                    logging.warning(f"Failed to set reaction: {await resp.text()}")
     except Exception as e:
-        logging.warning(f"Failed to send thumbs up reaction: {e}")
-        # As fallback, you can uncomment the next line to just reply with a thumbs up
-        # await bot.send_message(chat_id=chat_id, text="👍", reply_to_message_id=message_id)
+        logging.warning(f"Failed to set reaction: {e}")
+    return False
 
 @router.message(Command("language"))
 @router.message(Command("setlang"))
@@ -232,8 +241,8 @@ async def handle_reply(message: Message):
                 "to_user_id": orig_sender_id,
                 "from_user_id": message.from_user.id
             })
-            # Try to send reaction using raw API
-            await send_thumbs_reaction(bot, message.chat.id, message.message_id)
+            # Try to set reaction using the raw API
+            await set_reaction(bot, message.chat.id, message.message_id, "👍")
             return
 
 @router.message(Command("setusername"))
