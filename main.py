@@ -6,13 +6,18 @@ import aiohttp
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.context import FSMContext
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from langs import LANGS, LANG_NAMES
+
+# --- New imports for image feature ---
+from config import GENERATE_IMAGE_ON_ANONYMOUS
+from image_utils import generate_message_image
+import os
 
 API_TOKEN = "8032679205:AAHFMO9t-T7Lavbbf_noiePQoniDSHzSuVA"
 MONGODB_URL = "mongodb+srv://itxcriminal:qureshihashmI1@cluster0.jyqy9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -308,10 +313,25 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
         if not user:
             await message.answer(LANGS[lang]["user_not_found"])
             return
+        # Send the anonymous message as text
         sent = await bot.send_message(
             user["user_id"],
             LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)
         )
+        # Optionally also send as image, if enabled
+        if GENERATE_IMAGE_ON_ANONYMOUS:
+            image_path = generate_message_image(message.text)
+            if image_path:
+                try:
+                    await bot.send_photo(
+                        user["user_id"],
+                        photo=FSInputFile(image_path),
+                        caption=None
+                    )
+                finally:
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
+
         # Store mapping for reply
         await db.anonymous_links.insert_one({
             "reply_message_id": sent.message_id,
