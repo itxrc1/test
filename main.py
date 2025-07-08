@@ -89,43 +89,51 @@ async def set_language_command(message: Message):
 @router.callback_query(lambda c: c.data and c.data.startswith("lang_"))
 async def language_selected(callback_query, state: FSMContext):
     lang_code = callback_query.data.split("_", 1)[1]
-    await db.users.update_one(
-        {"user_id": callback_query.from_user.id},
-        {"$set": {"language": lang_code}},
-        upsert=True
-    )
     data = await state.get_data()
     start_param = data.get("start_param")
 
-    # If this is part of initial onboarding (first start), show the welcome
-    bot_username = (await bot.me()).username
-    user_short_username = await get_or_create_user(callback_query.from_user.id)
-    link = f"https://t.me/{bot_username}?start={user_short_username}"
+    # Check if user already exists
+    user = await db.users.find_one({"user_id": callback_query.from_user.id})
+    if not user:
+        # Create user properly now
+        while True:
+            short_username = generate_short_username()
+            if not await db.users.find_one({"short_username": short_username}):
+                break
+        link_id = secrets.token_urlsafe(8)
+        await db.users.insert_one({
+            "user_id": callback_query.from_user.id,
+            "link_id": link_id,
+            "short_username": short_username,
+            "messages_received": 0,
+            "link_clicks": 0,
+            "messages_received_daily": {},
+            "link_clicks_daily": {},
+            "language": lang_code
+        })
+    else:
+        # Update language if user exists
+        await db.users.update_one(
+            {"user_id": callback_query.from_user.id},
+            {"$set": {"language": lang_code}},
+        )
+        short_username = user.get("short_username") or user.get("link_id")
 
+    bot_username = (await bot.me()).username
+    link = f"https://t.me/{bot_username}?start={short_username}"
     await callback_query.answer()
     await callback_query.message.edit_text(
         LANGS[lang_code]["welcome"].format(link=link),
         reply_markup=get_share_keyboard(link, lang_code)
     )
     await state.clear()
-    # Optionally, you could check for start_param if you want to auto-handle deep link onboarding after language selection
 
 @router.message(CommandStart(deep_link=True))
 async def start_with_param(message: Message, command: CommandStart, state: FSMContext):
     link_id = extract_link_id(command.args)
     user = await db.users.find_one({"user_id": message.from_user.id})
     if not user:
-        # New user: ask for language selection first
-        await db.users.insert_one({
-            "user_id": message.from_user.id,
-            "link_id": None,
-            "short_username": None,
-            "messages_received": 0,
-            "link_clicks": 0,
-            "messages_received_daily": {},
-            "link_clicks_daily": {},
-            "language": "en"
-        })
+        # Don't insert user yet! Just ask for language and remember start param
         await state.update_data(start_param=link_id)
         await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
         return
@@ -159,17 +167,7 @@ async def start_with_param(message: Message, command: CommandStart, state: FSMCo
 async def start_no_param(message: Message, state: FSMContext):
     user = await db.users.find_one({"user_id": message.from_user.id})
     if not user:
-        # New user: ask for language selection first
-        await db.users.insert_one({
-            "user_id": message.from_user.id,
-            "link_id": None,
-            "short_username": None,
-            "messages_received": 0,
-            "link_clicks": 0,
-            "messages_received_daily": {},
-            "link_clicks_daily": {},
-            "language": "en"
-        })
+        # Don't insert user yet! Just ask for language
         await state.clear()
         await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
         return
