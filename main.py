@@ -37,7 +37,8 @@ client = AsyncIOMotorClient(MONGODB_URL)
 db = client[DB_NAME]
 
 def generate_short_username():
-    return f"anon{secrets.randbelow(100000):05d}"
+    # Changed prefix from "anon" to "ask"
+    return f"ask{secrets.randbelow(100000):05d}"
 
 def today_str():
     return datetime.utcnow().strftime("%Y-%m-%d")
