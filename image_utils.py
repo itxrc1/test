@@ -10,8 +10,8 @@ def generate_message_image(text, name="@Askoutbot"):
         "name": name,
         "text": text,
         "bubble": "#000000",
-        "background": "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        "avatar": "false"
+        "background": "random",
+        "avatar": "true"
     }
 
     base_url = "https://imessager.vercel.app/api/simple"
