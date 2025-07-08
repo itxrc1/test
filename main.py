@@ -81,8 +81,6 @@ def get_lang_markup():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# === Anonymous reply DB collection: anonymous_links ===
-
 @router.message(Command("language"))
 @router.message(Command("setlang"))
 async def set_language_command(message: Message):
@@ -200,7 +198,6 @@ async def start_no_param(message: Message, state: FSMContext):
 async def handle_reply(message: Message):
     replied = message.reply_to_message
     if replied:
-        # Find mapping in DB
         record = await db.anonymous_links.find_one({
             "reply_message_id": replied.message_id,
             "to_user_id": message.from_user.id
@@ -208,11 +205,17 @@ async def handle_reply(message: Message):
         if record:
             orig_sender_id = record["from_user_id"]
             lang = await get_user_lang(orig_sender_id)
-            await bot.send_message(
+            sent = await bot.send_message(
                 orig_sender_id,
                 f"📩 <b>You received a reply to your anonymous message:</b>\n\n{message.text}"
             )
             await message.answer("✅ Your reply has been sent anonymously!")
+            # Insert mapping for the reply message, so the thread can continue
+            await db.anonymous_links.insert_one({
+                "reply_message_id": sent.message_id,
+                "to_user_id": orig_sender_id,
+                "from_user_id": message.from_user.id
+            })
             return
 
 @router.message(Command("setusername"))
