@@ -81,6 +81,8 @@ def get_lang_markup():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+# === Anonymous reply DB collection: anonymous_links ===
+
 @router.message(Command("language"))
 @router.message(Command("setlang"))
 async def set_language_command(message: Message):
@@ -197,10 +199,14 @@ async def start_no_param(message: Message, state: FSMContext):
 @router.message(F.reply_to_message)
 async def handle_reply(message: Message):
     replied = message.reply_to_message
-    if replied and replied.text:
-        match = re.match(r"<!--anon_from:(\d+)-->\n", replied.text)
-        if match:
-            orig_sender_id = int(match.group(1))
+    if replied:
+        # Find mapping in DB
+        record = await db.anonymous_links.find_one({
+            "reply_message_id": replied.message_id,
+            "to_user_id": message.from_user.id
+        })
+        if record:
+            orig_sender_id = record["from_user_id"]
             lang = await get_user_lang(orig_sender_id)
             await bot.send_message(
                 orig_sender_id,
@@ -208,7 +214,6 @@ async def handle_reply(message: Message):
             )
             await message.answer("✅ Your reply has been sent anonymously!")
             return
-    # Otherwise, let other handlers proceed (don't reply or do anything)
 
 @router.message(Command("setusername"))
 async def set_custom_username(message: Message):
@@ -273,11 +278,16 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
         if not user:
             await message.answer(LANGS[lang]["user_not_found"])
             return
-        await bot.send_message(
+        sent = await bot.send_message(
             user["user_id"],
-            f"<!--anon_from:{message.from_user.id}-->\n"
-            f"{LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)}"
+            LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)
         )
+        # Store mapping for reply
+        await db.anonymous_links.insert_one({
+            "reply_message_id": sent.message_id,
+            "to_user_id": user["user_id"],
+            "from_user_id": message.from_user.id
+        })
         today = today_str()
         await db.users.update_one(
             {"user_id": user["user_id"]},
