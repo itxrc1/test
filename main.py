@@ -14,8 +14,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from langs import LANGS, LANG_NAMES
 
-# --- New imports for image feature ---
-from config import GENERATE_IMAGE_ON_ANONYMOUS
+# --- New imports for image and config feature ---
+from config import GENERATE_IMAGE_ON_ANONYMOUS, ALLOW_ANONYMOUS_REPLY
 from image_utils import generate_message_image
 import os
 
@@ -227,6 +227,8 @@ async def start_no_param(message: Message, state: FSMContext):
 
 @router.message(F.reply_to_message)
 async def handle_reply(message: Message):
+    if not ALLOW_ANONYMOUS_REPLY:
+        return
     replied = message.reply_to_message
     if replied:
         record = await db.anonymous_links.find_one({
@@ -246,7 +248,6 @@ async def handle_reply(message: Message):
                 "to_user_id": orig_sender_id,
                 "from_user_id": message.from_user.id
             })
-            # Try to set reaction using the raw API
             await set_reaction(bot, message.chat.id, message.message_id, "👍")
             return
 
@@ -313,31 +314,42 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
         if not user:
             await message.answer(LANGS[lang]["user_not_found"])
             return
-        # Send the anonymous message as text
-        sent = await bot.send_message(
-            user["user_id"],
-            LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)
-        )
-        # Optionally also send as image, if enabled
+
+        sent_msg = None
+
+        # If image generation is ON, send only image with caption
         if GENERATE_IMAGE_ON_ANONYMOUS:
             image_path = generate_message_image(message.text)
+            caption = LANGS[user.get('language', 'en')]['anonymous_received']
             if image_path:
                 try:
-                    await bot.send_photo(
+                    sent_msg = await bot.send_photo(
                         user["user_id"],
                         photo=FSInputFile(image_path),
-                        caption=None
+                        caption=caption
                     )
                 finally:
                     if os.path.exists(image_path):
                         os.remove(image_path)
+            else:
+                sent_msg = await bot.send_message(
+                    user["user_id"],
+                    caption
+                )
+        else:
+            sent_msg = await bot.send_message(
+                user["user_id"],
+                LANGS[user.get('language', 'en')]['anonymous_received'].format(message=message.text)
+            )
 
-        # Store mapping for reply
-        await db.anonymous_links.insert_one({
-            "reply_message_id": sent.message_id,
-            "to_user_id": user["user_id"],
-            "from_user_id": message.from_user.id
-        })
+        # Store mapping for reply (on image or fallback text message)
+        if sent_msg:
+            await db.anonymous_links.insert_one({
+                "reply_message_id": sent_msg.message_id,
+                "to_user_id": user["user_id"],
+                "from_user_id": message.from_user.id
+            })
+
         today = today_str()
         await db.users.update_one(
             {"user_id": user["user_id"]},
