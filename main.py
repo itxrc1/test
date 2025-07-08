@@ -209,13 +209,21 @@ async def handle_reply(message: Message):
                 orig_sender_id,
                 f"📩 <b>You received a reply to your anonymous message:</b>\n\n{message.text}"
             )
-            await message.answer("✅ Your reply has been sent anonymously!")
             # Insert mapping for the reply message, so the thread can continue
             await db.anonymous_links.insert_one({
                 "reply_message_id": sent.message_id,
                 "to_user_id": orig_sender_id,
                 "from_user_id": message.from_user.id
             })
+            # Send thumbs up as delivery confirmation
+            try:
+                await bot.send_reaction(
+                    chat_id=message.chat.id,
+                    message_id=message.message_id,
+                    emoji="👍"
+                )
+            except Exception as e:
+                logging.warning(f"Failed to send reaction: {e}")
             return
 
 @router.message(Command("setusername"))
