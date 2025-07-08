@@ -14,7 +14,7 @@ def generate_message_image(text, name="@Askoutbot", compact=True):
         "name": name,
         "text": text,
         "bubble": "#000000",
-        "background": "false",
+        "background": "random-gradient",
         "avatar": "false",
         "width": width,      # New parameter
         "height": height     # New parameter
