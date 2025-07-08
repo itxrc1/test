@@ -1,274 +1,140 @@
-import logging
-import secrets
-import re
-from datetime import datetime
-from aiogram import Bot, Dispatcher, Router, F
-from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.client.default import DefaultBotProperties
-from aiogram.fsm.context import FSMContext
-from motor.motor_asyncio import AsyncIOMotorClient
+# langs.py
 
-from langs import LANGS, LANG_NAMES
+LANGS = {
+    "en": {
+        "welcome": "👋 <b>Welcome to Ask Out!</b>\n\nYour anonymous question link:\n<code>{link}</code>\n\nAnyone can send you anonymous messages via this link.\nShare it anywhere!",
+        "share_btn": "🔗 Share your link",
+        "invalid_link": "Invalid or expired link.",
+        "send_anonymous": "✉️ <b>Send your anonymous message to this user.</b>\n\nJust type and send your message now.",
+        "set_username_usage": "Usage: <b>/setusername yourname</b>\nAllowed: a-z, 0-9, 3-20 chars.",
+        "invalid_username": "❌ Invalid username. Use only a-z, 0-9, underscores, 3-20 chars.",
+        "username_taken": "❌ This username is already taken. Try another.",
+        "username_set": "✅ Your custom username is set to <b>{username}</b>!\nYour new link:\n<code>{link}</code>",
+        "already_username": "You already have this username.",
+        "not_registered": "You are not registered yet. Use /start to get your anonymous link.",
+        "stats": "📊 <b>Your Stats</b>\n\n<b>Messages received:</b> <code>{messages_received}</code>\n<b>Messages received today:</b> <code>{messages_today}</code>\n\n<b>Link clicks:</b> <code>{link_clicks}</code>\n<b>Link clicks today:</b> <code>{clicks_today}</code>",
+        "user_not_found": "User not found. Maybe their link expired?",
+        "anonymous_received": "📩 <b>You received an anonymous message:</b>\n\n{message}",
+        "anonymous_sent": "✅ Your anonymous message has been sent anonymously!",
+        "choose_lang": "🌐 Please select your language / Пожалуйста, выберите язык / براہ کرم اپنی زبان منتخب کریں / الرجاء اختيار لغتك / 언어를 선택하세요 / Silakan pilih bahasa Anda / 请选择您的语言",
+        "lang_set": "✅ Language set to {lang}!",
+    },
+    "ru": {
+        "welcome": "👋 <b>Добро пожаловать в Ask Out!</b>\n\nВаша ссылка для анонимных вопросов:\n<code>{link}</code>\n\nЛюбой человек может отправить вам анонимное сообщение по этой ссылке.\nДелитесь ей где угодно!",
+        "share_btn": "🔗 Поделиться вашей ссылкой",
+        "invalid_link": "Недействительная или истекшая ссылка.",
+        "send_anonymous": "✉️ <b>Отправьте анонимное сообщение этому пользователю.</b>\n\nПросто напишите и отправьте сообщение сейчас.",
+        "set_username_usage": "Использование: <b>/setusername вашеимя</b>\nДопустимо: a-z, 0-9, 3-20 символов.",
+        "invalid_username": "❌ Недопустимое имя. Только латиница, цифры, подчёркивания, 3-20 символов.",
+        "username_taken": "❌ Это имя уже занято. Попробуйте другое.",
+        "username_set": "✅ Ваше имя пользователя установлено: <b>{username}</b>!\nВаша новая ссылка:\n<code>{link}</code>",
+        "already_username": "У вас уже есть это имя пользователя.",
+        "not_registered": "Вы ещё не зарегистрированы. Используйте /start, чтобы получить свою анонимную ссылку.",
+        "stats": "📊 <b>Ваша статистика</b>\n\n<b>Получено сообщений:</b> <code>{messages_received}</code>\n<b>Сегодня получено:</b> <code>{messages_today}</code>\n\n<b>Переходов по ссылке:</b> <code>{link_clicks}</code>\n<b>Переходов сегодня:</b> <code>{clicks_today}</code>",
+        "user_not_found": "Пользователь не найден. Возможно, его ссылка устарела.",
+        "anonymous_received": "📩 <b>Вы получили анонимное сообщение:</b>\n\n{message}",
+        "anonymous_sent": "✅ Ваше анонимное сообщение отправлено!",
+        "choose_lang": "🌐 Пожалуйста, выберите язык",
+        "lang_set": "✅ Язык установлен: {lang}!",
+    },
+    "ur": {
+        "welcome": "👋 <b>Ask Out میں خوش آمدید!</b>\n\nآپ کا گمنام سوال لنک:\n<code>{link}</code>\n\nکوئی بھی اس لنک کے ذریعے آپ کو گمنام پیغام بھیج سکتا ہے۔\nاسے کہیں بھی شیئر کریں!",
+        "share_btn": "🔗 اپنا لنک شیئر کریں",
+        "invalid_link": "غلط یا ختم شدہ لنک۔",
+        "send_anonymous": "✉️ <b>اس صارف کو اپنا گمنام پیغام بھیجیں۔</b>\n\nابھی اپنا پیغام ٹائپ کریں اور بھیجیں۔",
+        "set_username_usage": "استعمال: <b>/setusername آپکانام</b>\nمجاز: a-z، 0-9، 3-20 حروف۔",
+        "invalid_username": "❌ غلط یوزر نیم۔ صرف a-z، 0-9، انڈر اسکور، 3-20 حروف استعمال کریں۔",
+        "username_taken": "❌ یہ یوزر نیم پہلے سے لیا گیا ہے۔ کوئی اور کوشش کریں۔",
+        "username_set": "✅ آپ کا یوزر نیم سیٹ ہوگیا: <b>{username}</b>!\nآپ کا نیا لنک:\n<code>{link}</code>",
+        "already_username": "آپ کے پاس پہلے سے یہی یوزر نیم ہے۔",
+        "not_registered": "آپ ابھی تک رجسٹر نہیں ہوئے۔ اپنی گمنام لنک کے لیے /start استعمال کریں۔",
+        "stats": "📊 <b>آپ کے اعدادوشمار</b>\n\n<b>موصول شدہ پیغامات:</b> <code>{messages_received}</code>\n<b>آج موصول:</b> <code>{messages_today}</code>\n\n<b>لنک کلکس:</b> <code>{link_clicks}</code>\n<b>آج کلکس:</b> <code>{clicks_today}</code>",
+        "user_not_found": "صارف نہیں ملا۔ شاید ان کا لنک ختم ہوگیا ہو؟",
+        "anonymous_received": "📩 <b>آپ کو ایک گمنام پیغام موصول ہوا ہے:</b>\n\n{message}",
+        "anonymous_sent": "✅ آپ کا گمنام پیغام بھیج دیا گیا ہے!",
+        "choose_lang": "🌐 براہ کرم اپنی زبان منتخب کریں",
+        "lang_set": "✅ زبان سیٹ ہوگئی: {lang}!",
+    },
+    "ar": {
+        "welcome": "👋 <b>مرحبًا بك في Ask Out!</b>\n\nرابط سؤالك المجهول:\n<code>{link}</code>\n\nيمكن لأي شخص إرسال رسائل مجهولة عبر هذا الرابط.\nشاركها في أي مكان!",
+        "share_btn": "🔗 شارك رابطك",
+        "invalid_link": "الرابط غير صالح أو منتهي الصلاحية.",
+        "send_anonymous": "✉️ <b>أرسل رسالتك المجهولة لهذا المستخدم.</b>\n\nفقط اكتب وأرسل رسالتك الآن.",
+        "set_username_usage": "الاستخدام: <b>/setusername اسمك</b>\nيسمح بـ: a-z، 0-9، 3-20 حرفًا.",
+        "invalid_username": "❌ اسم مستخدم غير صالح. استخدم فقط a-z، 0-9، الشرطة السفلية، 3-20 حرفًا.",
+        "username_taken": "❌ اسم المستخدم هذا مأخوذ بالفعل. جرب اسمًا آخر.",
+        "username_set": "✅ تم تعيين اسم المستخدم الخاص بك إلى <b>{username}</b>!\nرابطك الجديد:\n<code>{link}</code>",
+        "already_username": "لديك بالفعل هذا الاسم.",
+        "not_registered": "لم يتم تسجيلك بعد. استخدم /start للحصول على رابطك المجهول.",
+        "stats": "📊 <b>إحصائياتك</b>\n\n<b>عدد الرسائل المستلمة:</b> <code>{messages_received}</code>\n<b>الرسائل المستلمة اليوم:</b> <code>{messages_today}</code>\n\n<b>عدد نقرات الرابط:</b> <code>{link_clicks}</code>\n<b>نقرات اليوم:</b> <code>{clicks_today}</code>",
+        "user_not_found": "المستخدم غير موجود. ربما انتهت صلاحيته؟",
+        "anonymous_received": "📩 <b>لقد تلقيت رسالة مجهولة:</b>\n\n{message}",
+        "anonymous_sent": "✅ تم إرسال رسالتك المجهولة!",
+        "choose_lang": "🌐 الرجاء اختيار لغتك",
+        "lang_set": "✅ تم تعيين اللغة إلى {lang}!",
+    },
+    "ko": {
+        "welcome": "👋 <b>Ask Out에 오신 것을 환영합니다!</b>\n\n익명 질문 링크:\n<code>{link}</code>\n\n누구나 이 링크를 통해 익명 메시지를 보낼 수 있습니다.\n어디서나 공유하세요!",
+        "share_btn": "🔗 링크 공유",
+        "invalid_link": "유효하지 않거나 만료된 링크입니다.",
+        "send_anonymous": "✉️ <b>이 사용자에게 익명 메시지를 보내세요.</b>\n\n지금 메시지를 입력하고 보내세요.",
+        "set_username_usage": "사용법: <b>/setusername 이름</b>\n허용: a-z, 0-9, 3-20자.",
+        "invalid_username": "❌ 잘못된 사용자 이름입니다. a-z, 0-9, 밑줄, 3-20자만 사용하세요.",
+        "username_taken": "❌ 이 사용자 이름은 이미 사용 중입니다. 다른 이름을 시도하세요.",
+        "username_set": "✅ 사용자 이름이 <b>{username}</b>로 설정되었습니다!\n새 링크:\n<code>{link}</code>",
+        "already_username": "이미 이 사용자 이름을 가지고 있습니다.",
+        "not_registered": "아직 등록되지 않았습니다. /start로 익명 링크를 받으세요.",
+        "stats": "📊 <b>내 통계</b>\n\n<b>받은 메시지:</b> <code>{messages_received}</code>\n<b>오늘 받은 메시지:</b> <code>{messages_today}</code>\n\n<b>링크 클릭:</b> <code>{link_clicks}</code>\n<b>오늘 클릭:</b> <code>{clicks_today}</code>",
+        "user_not_found": "사용자를 찾을 수 없습니다. 링크가 만료되었을 수 있습니다.",
+        "anonymous_received": "📩 <b>익명 메시지를 받았습니다:</b>\n\n{message}",
+        "anonymous_sent": "✅ 익명 메시지가 전송되었습니다!",
+        "choose_lang": "🌐 언어를 선택하세요",
+        "lang_set": "✅ 언어가 {lang}로 설정되었습니다!",
+    },
+    "id": {
+        "welcome": "👋 <b>Selamat datang di Ask Out!</b>\n\nTautan pertanyaan anonim kamu:\n<code>{link}</code>\n\nSiapa pun dapat mengirim pesan anonim melalui tautan ini.\nBagikan di mana saja!",
+        "share_btn": "🔗 Bagikan tautanmu",
+        "invalid_link": "Tautan tidak valid atau telah kedaluwarsa.",
+        "send_anonymous": "✉️ <b>Kirim pesan anonim kamu ke pengguna ini.</b>\n\nKetik dan kirim pesanmu sekarang.",
+        "set_username_usage": "Penggunaan: <b>/setusername namakamu</b>\nDiperbolehkan: a-z, 0-9, 3-20 karakter.",
+        "invalid_username": "❌ Username tidak valid. Gunakan hanya a-z, 0-9, garis bawah, 3-20 karakter.",
+        "username_taken": "❌ Username ini sudah diambil. Coba yang lain.",
+        "username_set": "✅ Username kamu telah disetel ke <b>{username}</b>!\nTautan barumu:\n<code>{link}</code>",
+        "already_username": "Kamu sudah memakai username ini.",
+        "not_registered": "Kamu belum terdaftar. Gunakan /start untuk mendapatkan tautan anonim.",
+        "stats": "📊 <b>Statistik Kamu</b>\n\n<b>Pesan diterima:</b> <code>{messages_received}</code>\n<b>Pesan hari ini:</b> <code>{messages_today}</code>\n\n<b>Klik tautan:</b> <code>{link_clicks}</code>\n<b>Klik hari ini:</b> <code>{clicks_today}</code>",
+        "user_not_found": "Pengguna tidak ditemukan. Mungkin tautannya kedaluwarsa?",
+        "anonymous_received": "📩 <b>Kamu menerima pesan anonim:</b>\n\n{message}",
+        "anonymous_sent": "✅ Pesan anonim kamu telah terkirim!",
+        "choose_lang": "🌐 Silakan pilih bahasa Anda",
+        "lang_set": "✅ Bahasa diatur ke {lang}!",
+    },
+    "zh": {
+        "welcome": "👋 <b>欢迎使用 Ask Out！</b>\n\n你的匿名提问链接：\n<code>{link}</code>\n\n任何人都可以通过此链接匿名给你发消息。\n随时分享吧！",
+        "share_btn": "🔗 分享你的链接",
+        "invalid_link": "无效或已过期的链接。",
+        "send_anonymous": "✉️ <b>向该用户发送匿名消息。</b>\n\n现在输入并发送你的消息。",
+        "set_username_usage": "用法: <b>/setusername 你的名字</b>\n允许: a-z, 0-9, 3-20字符。",
+        "invalid_username": "❌ 无效用户名。仅允许 a-z, 0-9, 下划线，3-20字符。",
+        "username_taken": "❌ 此用户名已被占用。请尝试其他。",
+        "username_set": "✅ 你的用户名已设置为 <b>{username}</b>！\n你的新链接：\n<code>{link}</code>",
+        "already_username": "你已经拥有这个用户名。",
+        "not_registered": "你尚未注册。请使用 /start 获取你的匿名链接。",
+        "stats": "📊 <b>你的统计</b>\n\n<b>收到的消息：</b> <code>{messages_received}</code>\n<b>今日收到：</b> <code>{messages_today}</code>\n\n<b>链接点击：</b> <code>{link_clicks}</code>\n<b>今日点击：</b> <code>{clicks_today}</code>",
+        "user_not_found": "未找到用户。也许他们的链接已过期？",
+        "anonymous_received": "📩 <b>你收到一条匿名消息：</b>\n\n{message}",
+        "anonymous_sent": "✅ 你的匿名消息已发送！",
+        "choose_lang": "🌐 请选择您的语言",
+        "lang_set": "✅ 语言已设置为 {lang}！",
+    }
+}
 
-API_TOKEN = "8032679205:AAHFMO9t-T7Lavbbf_noiePQoniDSHzSuVA"
-MONGODB_URL = "mongodb+srv://itxcriminal:qureshihashmI1@cluster0.jyqy9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DB_NAME = "askout"
-
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(
-    token=API_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-)
-dp = Dispatcher(storage=MemoryStorage())
-router = Router()
-dp.include_router(router)
-
-client = AsyncIOMotorClient(MONGODB_URL)
-db = client[DB_NAME]
-
-def generate_short_username():
-    return f"anon{secrets.randbelow(100000):05d}"
-
-def today_str():
-    return datetime.utcnow().strftime("%Y-%m-%d")
-
-async def get_or_create_user(user_id):
-    user = await db.users.find_one({"user_id": user_id})
-    if not user:
-        while True:
-            short_username = generate_short_username()
-            if not await db.users.find_one({"short_username": short_username}):
-                break
-        link_id = secrets.token_urlsafe(8)
-        await db.users.insert_one({
-            "user_id": user_id,
-            "link_id": link_id,
-            "short_username": short_username,
-            "messages_received": 0,
-            "link_clicks": 0,
-            "messages_received_daily": {},
-            "link_clicks_daily": {},
-            "language": "en"
-        })
-        return short_username
-    return user.get("short_username") or user.get("link_id")
-
-async def get_user_by_link_id(link_id):
-    return await db.users.find_one({"$or": [{"short_username": link_id}, {"link_id": link_id}]})
-
-def extract_link_id(start_param):
-    return start_param if start_param else None
-
-def get_share_keyboard(link, lang):
-    btn = InlineKeyboardButton(
-        text=LANGS[lang]['share_btn'],
-        switch_inline_query=f"Ask me anything! It's anonymous: {link}"
-    )
-    return InlineKeyboardMarkup(inline_keyboard=[[btn]])
-
-async def get_user_lang(user_id):
-    user = await db.users.find_one({"user_id": user_id})
-    return user.get("language", "en") if user else "en"
-
-def get_lang_markup():
-    buttons = [
-        [InlineKeyboardButton(text=LANG_NAMES[code], callback_data=f"lang_{code}")]
-        for code in LANGS
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-@router.message(Command("language"))
-@router.message(Command("setlang"))
-async def set_language_command(message: Message):
-    await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
-
-@router.callback_query(lambda c: c.data and c.data.startswith("lang_"))
-async def language_selected(callback_query, state: FSMContext):
-    lang_code = callback_query.data.split("_", 1)[1]
-    await db.users.update_one(
-        {"user_id": callback_query.from_user.id},
-        {"$set": {"language": lang_code}},
-        upsert=True
-    )
-    data = await state.get_data()
-    start_param = data.get("start_param")
-
-    # If this is part of initial onboarding (first start), show the welcome
-    bot_username = (await bot.me()).username
-    user_short_username = await get_or_create_user(callback_query.from_user.id)
-    link = f"https://t.me/{bot_username}?start={user_short_username}"
-
-    await callback_query.answer()
-    await callback_query.message.edit_text(
-        LANGS[lang_code]["welcome"].format(link=link),
-        reply_markup=get_share_keyboard(link, lang_code)
-    )
-    await state.clear()
-    # Optionally, you could check for start_param if you want to auto-handle deep link onboarding after language selection
-
-@router.message(CommandStart(deep_link=True))
-async def start_with_param(message: Message, command: CommandStart, state: FSMContext):
-    link_id = extract_link_id(command.args)
-    user = await db.users.find_one({"user_id": message.from_user.id})
-    if not user:
-        # New user: ask for language selection first
-        await db.users.insert_one({
-            "user_id": message.from_user.id,
-            "link_id": None,
-            "short_username": None,
-            "messages_received": 0,
-            "link_clicks": 0,
-            "messages_received_daily": {},
-            "link_clicks_daily": {},
-            "language": "en"
-        })
-        await state.update_data(start_param=link_id)
-        await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
-        return
-    lang = await get_user_lang(message.from_user.id)
-    if link_id:
-        user = await get_user_by_link_id(link_id)
-        if not user:
-            await message.answer(LANGS[lang]["invalid_link"])
-            return
-        if user["user_id"] != message.from_user.id:
-            today = today_str()
-            await db.users.update_one(
-                {"user_id": user["user_id"]},
-                {
-                    "$inc": {"link_clicks": 1},
-                    "$set": {f"link_clicks_daily.{today}": (user.get("link_clicks_daily", {}).get(today, 0) + 1)}
-                }
-            )
-        await state.update_data(target_link_id=link_id)
-        await message.answer(LANGS[lang]["send_anonymous"])
-    else:
-        user_short_username = await get_or_create_user(message.from_user.id)
-        bot_username = (await bot.me()).username
-        link = f"https://t.me/{bot_username}?start={user_short_username}"
-        await message.answer(
-            LANGS[lang]["welcome"].format(link=link),
-            reply_markup=get_share_keyboard(link, lang)
-        )
-
-@router.message(CommandStart(deep_link=False))
-async def start_no_param(message: Message, state: FSMContext):
-    user = await db.users.find_one({"user_id": message.from_user.id})
-    if not user:
-        # New user: ask for language selection first
-        await db.users.insert_one({
-            "user_id": message.from_user.id,
-            "link_id": None,
-            "short_username": None,
-            "messages_received": 0,
-            "link_clicks": 0,
-            "messages_received_daily": {},
-            "link_clicks_daily": {},
-            "language": "en"
-        })
-        await state.clear()
-        await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
-        return
-    lang = await get_user_lang(message.from_user.id)
-    user_short_username = await get_or_create_user(message.from_user.id)
-    bot_username = (await bot.me()).username
-    link = f"https://t.me/{bot_username}?start={user_short_username}"
-    await message.answer(
-        LANGS[lang]["welcome"].format(link=link),
-        reply_markup=get_share_keyboard(link, lang)
-    )
-    await state.clear()
-
-@router.message(Command("setusername"))
-async def set_custom_username(message: Message):
-    lang = await get_user_lang(message.from_user.id)
-    args = message.text.strip().split()
-    if len(args) != 2:
-        await message.answer(LANGS[lang]["set_username_usage"])
-        return
-    new_username = args[1].lower()
-    if not re.fullmatch(r"[a-z0-9_]{3,20}", new_username):
-        await message.answer(LANGS[lang]["invalid_username"])
-        return
-    existing = await db.users.find_one({"short_username": new_username})
-    if existing:
-        if existing["user_id"] == message.from_user.id:
-            await message.answer(LANGS[lang]["already_username"])
-        else:
-            await message.answer(LANGS[lang]["username_taken"])
-        return
-    await db.users.update_one(
-        {"user_id": message.from_user.id},
-        {"$set": {"short_username": new_username}},
-        upsert=True
-    )
-    bot_username = (await bot.me()).username
-    link = f"https://t.me/{bot_username}?start={new_username}"
-    await message.answer(
-        LANGS[lang]["username_set"].format(username=new_username, link=link),
-        reply_markup=get_share_keyboard(link, lang)
-    )
-
-@router.message(Command("stats"))
-async def stats_command(message: Message):
-    lang = await get_user_lang(message.from_user.id)
-    user = await db.users.find_one({"user_id": message.from_user.id})
-    if not user:
-        await message.answer(LANGS[lang]["not_registered"])
-        return
-    today = today_str()
-    messages_received = user.get("messages_received", 0)
-    link_clicks = user.get("link_clicks", 0)
-    messages_received_daily = user.get("messages_received_daily", {})
-    link_clicks_daily = user.get("link_clicks_daily", {})
-    messages_today = messages_received_daily.get(today, 0)
-    clicks_today = link_clicks_daily.get(today, 0)
-    await message.answer(
-        LANGS[lang]["stats"].format(
-            messages_received=messages_received,
-            messages_today=messages_today,
-            link_clicks=link_clicks,
-            clicks_today=clicks_today
-        )
-    )
-
-@router.message(F.text)
-async def handle_anonymous_message(message: Message, state: FSMContext):
-    lang = await get_user_lang(message.from_user.id)
-    data = await state.get_data()
-    target_link_id = data.get("target_link_id")
-    if target_link_id:
-        user = await get_user_by_link_id(target_link_id)
-        if not user:
-            await message.answer(LANGS[lang]["user_not_found"])
-            return
-        await bot.send_message(
-            user["user_id"],
-            LANGS[user.get("language", "en")]["anonymous_received"].format(message=message.text)
-        )
-        today = today_str()
-        await db.users.update_one(
-            {"user_id": user["user_id"]},
-            {
-                "$inc": {"messages_received": 1},
-                "$set": {f"messages_received_daily.{today}": (user.get("messages_received_daily", {}).get(today, 0) + 1)}
-            }
-        )
-        await message.answer(LANGS[lang]["anonymous_sent"])
-        await state.clear()
-    else:
-        user_short_username = await get_or_create_user(message.from_user.id)
-        bot_username = (await bot.me()).username
-        link = f"https://t.me/{bot_username}?start={user_short_username}"
-        await message.answer(
-            LANGS[lang]["welcome"].format(link=link),
-            reply_markup=get_share_keyboard(link, lang)
-        )
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(dp.start_polling(bot))
+LANG_NAMES = {
+    "en": "English",
+    "ru": "Русский",
+    "ur": "اردو",
+    "ar": "العربية",
+    "ko": "한국어",
+    "id": "Bahasa Indonesia",
+    "zh": "中文",
+}
