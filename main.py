@@ -81,6 +81,23 @@ def get_lang_markup():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+# --- Helper to send thumbs up reaction using the raw Bot API (Bot API 7.0+ only) ---
+async def send_thumbs_reaction(bot, chat_id, message_id):
+    try:
+        # This uses aiogram's low-level API. Will only work if Telegram Bot API 7.0+ is available.
+        await bot.api.request(
+            "sendMessageReaction",
+            {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "emoji": "👍"
+            }
+        )
+    except Exception as e:
+        logging.warning(f"Failed to send thumbs up reaction: {e}")
+        # As fallback, you can uncomment the next line to just reply with a thumbs up
+        # await bot.send_message(chat_id=chat_id, text="👍", reply_to_message_id=message_id)
+
 @router.message(Command("language"))
 @router.message(Command("setlang"))
 async def set_language_command(message: Message):
@@ -215,15 +232,8 @@ async def handle_reply(message: Message):
                 "to_user_id": orig_sender_id,
                 "from_user_id": message.from_user.id
             })
-            # Send thumbs up as delivery confirmation
-            try:
-                await bot.send_reaction(
-                    chat_id=message.chat.id,
-                    message_id=message.message_id,
-                    emoji="👍"
-                )
-            except Exception as e:
-                logging.warning(f"Failed to send reaction: {e}")
+            # Try to send reaction using raw API
+            await send_thumbs_reaction(bot, message.chat.id, message.message_id)
             return
 
 @router.message(Command("setusername"))
