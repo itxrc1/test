@@ -15,7 +15,7 @@ from langs import LANGS, LANG_NAMES
 
 API_TOKEN = "8032679205:AAHFMO9t-T7Lavbbf_noiePQoniDSHzSuVA"
 MONGODB_URL = "mongodb+srv://itxcriminal:qureshihashmI1@cluster0.jyqy9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-DB_NAME = "askout5"
+DB_NAME = "askout"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -92,10 +92,9 @@ async def language_selected(callback_query, state: FSMContext):
     data = await state.get_data()
     start_param = data.get("start_param")
 
-    # Check if user already exists
+    # Create user if not exists
     user = await db.users.find_one({"user_id": callback_query.from_user.id})
     if not user:
-        # Create user properly now
         while True:
             short_username = generate_short_username()
             if not await db.users.find_one({"short_username": short_username}):
@@ -112,16 +111,33 @@ async def language_selected(callback_query, state: FSMContext):
             "language": lang_code
         })
     else:
-        # Update language if user exists
         await db.users.update_one(
             {"user_id": callback_query.from_user.id},
             {"$set": {"language": lang_code}},
         )
         short_username = user.get("short_username") or user.get("link_id")
 
-    bot_username = (await bot.me()).username
-    link = f"https://t.me/{bot_username}?start={short_username}"
     await callback_query.answer()
+
+    if start_param:
+        target_user = await get_user_by_link_id(start_param)
+        if target_user:
+            # Save in state so next text is sent as anonymous
+            await state.update_data(target_link_id=start_param)
+            await callback_query.message.edit_text(
+                LANGS[lang_code]["send_anonymous"]
+            )
+        else:
+            await callback_query.message.edit_text(
+                LANGS[lang_code]["invalid_link"]
+            )
+        await state.update_data(start_param=None)
+        return
+
+    # If no start_param, show welcome and user own link
+    bot_username = (await bot.me()).username
+    user_short_username = await get_or_create_user(callback_query.from_user.id)
+    link = f"https://t.me/{bot_username}?start={user_short_username}"
     await callback_query.message.edit_text(
         LANGS[lang_code]["welcome"].format(link=link),
         reply_markup=get_share_keyboard(link, lang_code)
@@ -167,7 +183,6 @@ async def start_with_param(message: Message, command: CommandStart, state: FSMCo
 async def start_no_param(message: Message, state: FSMContext):
     user = await db.users.find_one({"user_id": message.from_user.id})
     if not user:
-        # Don't insert user yet! Just ask for language
         await state.clear()
         await message.answer(LANGS["en"]["choose_lang"], reply_markup=get_lang_markup())
         return
